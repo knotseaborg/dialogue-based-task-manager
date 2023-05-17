@@ -1,0 +1,4 @@
+env.sh
+tests.txt
+temp/*
+go.sum
