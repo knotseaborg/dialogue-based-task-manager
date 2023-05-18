@@ -1,7 +1,6 @@
 package activity
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"strconv"
@@ -39,15 +38,12 @@ func CreateMainActivity(c *gin.Context) {
 	if err := InsertActivity(dbC, &activity); err != nil {
 		log.Fatal(err)
 	}
-	jsonContent, err := json.Marshal(activity)
-	if err != nil {
-		log.Fatal(err)
-	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":     http.StatusOK,
+		"activity": activity,
+		"message":  "stored activity in database",
 	})
-	fmt.Println("Created new Activity")
+	log.Println("stored activity: ", activity)
 }
 
 func CreateFollowUpActivity(c *gin.Context) {
@@ -56,6 +52,22 @@ func CreateFollowUpActivity(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// Check if the main activity exists
+	mainActivity, err := FetchActivityByID(dbC, mainActivityID)
+	if err != nil {
+		switch err.(type) {
+		default:
+			log.Fatal(err)
+		case NoActivityError:
+			c.JSON(http.StatusOK, gin.H{
+				"code":     http.StatusNotFound,
+				"activity": "",
+				"message":  "main activity not found in database",
+			})
+			log.Printf("main activity with id: %d not found in database", mainActivityID)
+			return
+		}
+	}
 	if err := c.BindJSON(&activity); err != nil {
 		log.Fatal(err)
 	}
@@ -63,15 +75,12 @@ func CreateFollowUpActivity(c *gin.Context) {
 		log.Fatal(err)
 	}
 	InsertActivityRelation(dbC, mainActivityID, activity.ID)
-	jsonContent, err := json.Marshal(activity)
-	if err != nil {
-		log.Fatal(err)
-	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":     http.StatusOK,
+		"activity": activity,
+		"message":  fmt.Sprintf("stored follow-up activity with id: %d, in database for activity with id: %d", activity.ID, mainActivityID),
 	})
-	fmt.Println("Created Follow up Activity for Activity")
+	log.Println("stored follow-up activity with id: ", activity, "for activity: ", mainActivity)
 }
 
 func ActivityByID(c *gin.Context) {
@@ -82,64 +91,71 @@ func ActivityByID(c *gin.Context) {
 	// Returns the activity given an ID
 	activity, err := FetchActivityByID(dbC, ID)
 	if err != nil {
-		log.Fatal(err)
-	}
-	jsonContent, err := json.Marshal(activity)
-	if err != nil {
-		log.Fatal(err)
+		switch err.(type) {
+		default:
+			log.Fatal(err)
+		case NoActivityError:
+			c.JSON(http.StatusOK, gin.H{
+				"code":     http.StatusNotFound,
+				"activity": "",
+				"message":  fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+			})
+			log.Printf("activty with id %d does not exist in the database", ID)
+			return
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":     http.StatusOK,
+		"activity": activity,
+		"message":  fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
 	})
-	fmt.Println("Fetched activity from ID")
+	log.Println("fetched activity from database using ID")
 }
 
 func ActivitiesByFilter(c *gin.Context) {
-	// Returns activities
+	/* Returns activities which satisfy the search conditions in the filter */
 	var filter Filter
 	if err := c.BindJSON(&filter); err != nil {
 		log.Fatal(err)
 	}
 	activities, err := FetchActivityByFilter(dbC, &filter)
 	if err != nil {
-		log.Fatal(err)
-	}
-	jsonContent, err := json.Marshal(activities)
-	if err != nil {
-		log.Fatal(err)
+		switch err.(type) {
+		default:
+			log.Fatal(err)
+		case NoActivityError:
+			c.JSON(http.StatusOK, gin.H{
+				"code":       http.StatusNotFound,
+				"activities": "",
+				"message":    "activty with the filter does not exist in the database",
+			})
+			log.Printf("activty with the filter does not exist in the database")
+			return
+		}
+
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":       http.StatusOK,
+		"activities": activities,
+		"message":    "fetched activities from database using filter",
 	})
-	fmt.Println("Fetched activities")
+	fmt.Println("fetched activities: ", len(activities), ", using filter", filter)
 }
 
 func EditActivity(c *gin.Context) {
-	// Pass the modified activity with old id.
-	// Old id will be used to delete the old activity
+	/*Edit activity details*/
 	var activity Activity
 	if err := c.BindJSON(&activity); err != nil {
 		log.Fatal(err)
 	}
-	//Delete activity
-	if err := DeleteActivityByID(dbC, activity.ID); err != nil {
-		log.Fatal(err)
-	}
-	//Create new activity
-	if err := InsertActivity(dbC, &activity); err != nil {
-		log.Fatal(err)
-	}
-	jsonContent, err := json.Marshal(activity)
-	if err != nil {
+	if err := ModifyActivity(dbC, &activity); err != nil {
 		log.Fatal(err)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":     http.StatusOK,
+		"activity": activity,
+		"message":  fmt.Sprintf("edited activity with id: %d, in database", activity.ID),
 	})
-	fmt.Println("Edited Activity")
 }
 
 func DeleteActivity(c *gin.Context) {
@@ -149,15 +165,12 @@ func DeleteActivity(c *gin.Context) {
 		log.Fatal(err)
 	}
 	//Delete activity
-	if err := DeleteActivityByID(dbC, activity.ID); err != nil {
-		log.Fatal(err)
-	}
-	jsonContent, err := json.Marshal(activity)
-	if err != nil {
+	if err := DeleteActivityByID(dbC, activity.ID, true); err != nil {
 		log.Fatal(err)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": string(jsonContent),
+		"code":     http.StatusOK,
+		"activity": activity,
+		"message":  fmt.Sprintf("deleted activity with id: %d", activity.ID),
 	})
 }

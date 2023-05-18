@@ -3,6 +3,7 @@ package activity
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
@@ -20,10 +21,10 @@ func CreateConnection() (*DBConnection, error) {
 }
 
 func InsertActivity(dbC *DBConnection, activity *Activity) error {
-	/*This functions creates a new activity in the Database
-	 */
+	/*This functions creates a new activity in the Database*/
 	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
-		`MERGE (ac:Activity{Description: $description, StartTime: datetime($startTime), EndTime:datetime($endTime), Priority:$priority })
+		`MERGE (ac:Activity{Description: $description, StartTime: datetime($startTime), 
+			EndTime:datetime($endTime), Priority:$priority, Status:$status })
 		return id(ac) as activityID`,
 		map[string]any{
 			"description": activity.Description,
@@ -79,8 +80,7 @@ func InsertActivity(dbC *DBConnection, activity *Activity) error {
 }
 
 func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
-	/*This function retrieves an activity from the database
-	 */
+	/*This function retrieves an activity from the database*/
 	activity := Activity{ID: ID}
 	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		"MATCH (ac:Activity) WHERE id(ac) = toInteger($id) RETURN ac",
@@ -90,9 +90,12 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(result.Records) == 0 {
+		return nil, NoActivityError{}
+	}
 	activityNode, _, err := neo4j.GetRecordValue[neo4j.Node](result.Records[0], "ac")
 	if err != nil {
-		return nil, fmt.Errorf("could not find activity node")
+		return nil, NoActivityError{}
 	}
 	startTime, err := neo4j.GetProperty[time.Time](activityNode, "StartTime")
 	fmt.Println(startTime)
@@ -151,8 +154,7 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 }
 
 func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error) {
-	/*This function fetches activity by filters
-	 */
+	/*This function fetches activity by filters*/
 	activities := make([]Activity, 0)
 
 	// Default values for TimeBounds
@@ -183,6 +185,9 @@ func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error
 		return nil, err
 	}
 
+	if len(result.Records) == 0 {
+		return nil, NoActivityError{}
+	}
 	for _, record := range result.Records {
 		activityID, _, err := neo4j.GetRecordValue[int64](record, "acID")
 		if err != nil {
@@ -198,9 +203,37 @@ func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error
 	return activities, nil
 }
 
-func DeleteActivityByID(dbC *DBConnection, activityID int) error {
-	/*This function deletes activity from database
-	 */
+func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
+	/*This function deletes the activity and all associated activities from database if cascading is requested*/
+	if cascade {
+		result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
+			`MATCH (ac:Activity)<-[:FOLLOWIP]-(o) WHERE ID(ac) = toInteger($id)
+			RETURN ID(o) as otherActivityID`,
+			map[string]any{
+				"id": activityID,
+			}, neo4j.EagerResultTransformer)
+		if err != nil {
+			return err
+		}
+		// Delete all follow up activities
+		for _, record := range result.Records {
+			otherActivityID, _, err := neo4j.GetRecordValue[int64](record, "otherActvityID")
+			if err != nil {
+				return err
+			}
+			err = DeleteActivityByID(dbC, int(otherActivityID), true)
+			if err != nil {
+				return err
+			}
+		}
+		// Delete main activity
+		err = DeleteActivityByID(dbC, activityID, false)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	// If cascade isn't requested, only delete the activity
 	_, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		`MATCH (ac:Activity) WHERE ID(ac) = toInteger($id) WITH ac
 		DETACH DELETE ac`,
@@ -213,9 +246,32 @@ func DeleteActivityByID(dbC *DBConnection, activityID int) error {
 	return nil
 }
 
+func ModifyActivity(dbC *DBConnection, modifiedActivity *Activity) error {
+	/*This functions creates a new activity in the Database*/
+	_, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
+		`MATCH(ac) WHERE ID(ac) = toInteger($id) with ac
+		SET ac.Description = $description, 
+		ac.StartTime = datetime($startTime),
+		ac.EndTime = datetime($endTime),
+		ac.Priority = toInteger($priority),
+		ac.Status = toBooleanOrNull($status)`,
+		map[string]any{
+			"id":          modifiedActivity.ID,
+			"description": modifiedActivity.Description,
+			"startTime":   modifiedActivity.StartTime,
+			"endTime":     modifiedActivity.EndTime,
+			"priority":    modifiedActivity.Priority,
+			"status":      modifiedActivity.Status,
+		}, neo4j.EagerResultTransformer)
+	if err != nil {
+		return err
+	}
+	log.Println("modified activity into: ", modifiedActivity)
+	return nil
+}
+
 func InsertActivityRelation(dbC *DBConnection, mainActivityID int, otherActivityID int) error {
-	/*This functions inserts a relation between activitiesoo
-	 */
+	/*This functions inserts a relation between activities*/
 	_, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		`MATCH(m:Activity) WHERE ID(m) = toInteger($mainId) with m
 		MATCH(o:Activity) WHERE ID(o) = toInteger($otherId) with o
