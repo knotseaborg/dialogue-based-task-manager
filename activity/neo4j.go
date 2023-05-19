@@ -4,14 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
 func CreateConnection() (*DBConnection, error) {
-	dbURI := "neo4j://localhost:7687" // scheme://host(:port) (default port is 7687)
-	driver, err := neo4j.NewDriverWithContext(dbURI, neo4j.BasicAuth("neo4j", "password", ""))
+	driver, err := neo4j.NewDriverWithContext(os.Getenv("DBTM_DB_URI"),
+		neo4j.BasicAuth(os.Getenv("DBTM_DB_USER"), os.Getenv("DBTM_DB_PASSWORD"), ""))
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,6 @@
+export DBTM_OPEN_AI_KEY="xxxxxxx"
+export DBTM_AUDIO_INPUT_PATH="./temp/input.wav"
+export DBTM_LOG_PATH="./temp/log.txt"
+export DBTM_DB_URI="neo4j://localhost:7687"
+export DBTM_DB_USER="xxxxxxx"
+export DBTM_DB_PASSWORD="xxxxxxx"
