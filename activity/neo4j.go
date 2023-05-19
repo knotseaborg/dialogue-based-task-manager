@@ -207,7 +207,7 @@ func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
 	/*This function deletes the activity and all associated activities from database if cascading is requested*/
 	if cascade {
 		result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
-			`MATCH (ac:Activity)<-[:FOLLOWIP]-(o) WHERE ID(ac) = toInteger($id)
+			`MATCH (ac:Activity)<-[:FOLLOWUP]-(o) WHERE ID(ac) = toInteger($id)
 			RETURN ID(o) as otherActivityID`,
 			map[string]any{
 				"id": activityID,
@@ -217,7 +217,7 @@ func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
 		}
 		// Delete all follow up activities
 		for _, record := range result.Records {
-			otherActivityID, _, err := neo4j.GetRecordValue[int64](record, "otherActvityID")
+			otherActivityID, _, err := neo4j.GetRecordValue[int64](record, "otherActivityID")
 			if err != nil {
 				return err
 			}
@@ -243,6 +243,7 @@ func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("deleted activity with id: %d from database", activityID)
 	return nil
 }
 
@@ -274,7 +275,7 @@ func InsertActivityRelation(dbC *DBConnection, mainActivityID int, otherActivity
 	/*This functions inserts a relation between activities*/
 	_, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		`MATCH(m:Activity) WHERE ID(m) = toInteger($mainId) with m
-		MATCH(o:Activity) WHERE ID(o) = toInteger($otherId) with o
+		MATCH(o:Activity) WHERE ID(o) = toInteger($otherId) with m, o
 		MERGE (m)<-[:FOLLOWUP]-(o)`,
 		map[string]any{
 			"mainId":  mainActivityID,

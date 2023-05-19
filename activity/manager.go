@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"time"
 
 	"net/http"
 
@@ -24,10 +25,19 @@ func Main() {
 	router.PUT("/create/:id", CreateFollowUpActivity)
 	router.GET("/activity/:id", ActivityByID)
 	router.POST("/activity", ActivitiesByFilter)
-	router.DELETE("/activity", DeleteActivity)
+	router.DELETE("/activity/:id", DeleteActivity)
 	router.PUT("/move", EditActivity)
+	router.GET("/time", Now)
 
 	router.Run("localhost:8080")
+}
+
+func Now(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"code":    http.StatusOK,
+		"time":    time.Now().Format(TIMEFORMAT),
+		"message": fmt.Sprint("time right now is ", time.Now()),
+	})
 }
 
 func CreateMainActivity(c *gin.Context) {
@@ -160,17 +170,16 @@ func EditActivity(c *gin.Context) {
 
 func DeleteActivity(c *gin.Context) {
 	// Pass the whole object, just to be sure of the deletion
-	var activity Activity
-	if err := c.BindJSON(activity); err != nil {
+	mainActivityID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
 		log.Fatal(err)
 	}
 	//Delete activity
-	if err := DeleteActivityByID(dbC, activity.ID, true); err != nil {
+	if err := DeleteActivityByID(dbC, mainActivityID, true); err != nil {
 		log.Fatal(err)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":     http.StatusOK,
-		"activity": activity,
-		"message":  fmt.Sprintf("deleted activity with id: %d", activity.ID),
+		"code":    http.StatusOK,
+		"message": fmt.Sprintf("deleted activity with id: %d", mainActivityID),
 	})
 }
