@@ -21,13 +21,14 @@ func Main() {
 	}
 	defer dbC.CloseConnection()
 	router := gin.Default()
-	router.PUT("/create", CreateMainActivity)
-	router.PUT("/create/:id", CreateFollowUpActivity)
+	router.PUT("/activity/create", CreateMainActivity)
+	router.PUT("/followup/create/:id", CreateFollowUpActivity)
 	router.GET("/activity/:id", ActivityByID)
 	router.POST("/activity", ActivitiesByFilter)
+	router.GET("/followup/:id", FollowUpActivitiesByID)
 	router.DELETE("/activity/:id", DeleteActivity)
-	router.PUT("/move", EditActivity)
-	router.GET("/time", Now)
+	router.PUT("activity/edit", EditActivity)
+	router.GET("/user/time", Now)
 
 	router.Run("localhost:8080")
 }
@@ -122,13 +123,56 @@ func ActivityByID(c *gin.Context) {
 	log.Println("fetched activity from database using ID")
 }
 
+func FollowUpActivitiesByID(c *gin.Context) {
+	ID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Returns the activity given an ID
+	_, err = FetchActivityByID(dbC, ID)
+	if err != nil {
+		switch err.(type) {
+		default:
+			log.Fatal(err)
+		case NoActivityError:
+			c.JSON(http.StatusOK, gin.H{
+				"code":     http.StatusNotFound,
+				"activity": "",
+				"message":  fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+			})
+			log.Printf("activty with id %d does not exist in the database", ID)
+			return
+		}
+	}
+	activities, err := FetchFollowUpActivitiesByID(dbC, ID)
+	if err != nil {
+		switch err.(type) {
+		default:
+			log.Fatal(err)
+		case NoActivityError:
+			c.JSON(http.StatusOK, gin.H{
+				"code":       http.StatusNotFound,
+				"activities": activities,
+				"message":    fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+			})
+			return
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":       http.StatusOK,
+		"activities": activities,
+		"message":    fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
+	})
+	log.Println("fetched activity from database using ID")
+}
+
 func ActivitiesByFilter(c *gin.Context) {
 	/* Returns activities which satisfy the search conditions in the filter */
 	var filter Filter
 	if err := c.BindJSON(&filter); err != nil {
 		log.Fatal(err)
 	}
-	activities, err := FetchActivityByFilter(dbC, &filter)
+	activities, err := FetchActivitiesByFilter(dbC, &filter)
 	if err != nil {
 		switch err.(type) {
 		default:
@@ -142,7 +186,6 @@ func ActivitiesByFilter(c *gin.Context) {
 			log.Printf("activty with the filter does not exist in the database")
 			return
 		}
-
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"code":       http.StatusOK,
@@ -161,6 +204,7 @@ func EditActivity(c *gin.Context) {
 	if err := ModifyActivity(dbC, &activity); err != nil {
 		log.Fatal(err)
 	}
+	log.Println("modified activity into: ", activity)
 	c.JSON(http.StatusOK, gin.H{
 		"code":     http.StatusOK,
 		"activity": activity,
@@ -178,6 +222,7 @@ func DeleteActivity(c *gin.Context) {
 	if err := DeleteActivityByID(dbC, mainActivityID, true); err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("deleted activity with id: %d from database", mainActivityID)
 	c.JSON(http.StatusOK, gin.H{
 		"code":    http.StatusOK,
 		"message": fmt.Sprintf("deleted activity with id: %d", mainActivityID),

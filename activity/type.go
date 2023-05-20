@@ -28,6 +28,7 @@ type Filter struct {
 	StartTimeBounds TimeBounds `json:"start_time_bounds"`
 	EndTimeBounds   TimeBounds `json:"end_time_bounds"`
 	Keywords        []string   `json:"keywords"`
+	Participants    []string   `json:"participants"`
 }
 
 func (f TimeBounds) isEmpty() bool {

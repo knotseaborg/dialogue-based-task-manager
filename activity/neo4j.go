@@ -3,7 +3,6 @@ package activity
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -99,13 +98,11 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 		return nil, NoActivityError{}
 	}
 	startTime, err := neo4j.GetProperty[time.Time](activityNode, "StartTime")
-	fmt.Println(startTime)
 	if err != nil {
 		return nil, err
 	}
 	activity.StartTime = startTime.Format(TIMEFORMAT)
 	endTime, err := neo4j.GetProperty[time.Time](activityNode, "EndTime")
-	fmt.Println(endTime)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +151,7 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 	return &activity, nil
 }
 
-func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error) {
+func FetchActivitiesByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error) {
 	/*This function fetches activity by filters*/
 	activities := make([]Activity, 0)
 
@@ -172,10 +169,13 @@ func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error
 	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		`MATCH (ac:Activity) WHERE ac.StartTime >= DATETIME($startTimeLower) AND ac.StartTime <= DATETIME($startTimeUpper)
 		AND ac.EndTime >= DATETIME($EndTimeLower) AND ac.EndTime <= DATETIME($EndTimeUpper) WITH ac
-		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR kw.Text IN $keywords WITH kw
-		MATCH (kw)-[:INDEX]-(ac:Activity)
-		RETURN ID(ac) as acID`,
+		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR kw.Text IN $keywords WITH kw, ac
+		MATCH (kw)-[:INDEX]-(ac) WITH ac
+		MATCH (p:Person) WHERE SIZE($participants) = 0 OR p.Name IN $participants WITH ac, p
+		MATCH (p)-[:PARTICIPANT]-(ac)
+		RETURN DISTINCT ID(ac) as acID`,
 		map[string]any{
+			"participants":   filter.Participants,
 			"keywords":       filter.Keywords,
 			"startTimeLower": filter.StartTimeBounds.LowerBound,
 			"startTimeUpper": filter.StartTimeBounds.UpperBound,
@@ -200,7 +200,37 @@ func FetchActivityByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error
 		}
 		activities = append(activities, *activity)
 	}
+	return activities, nil
+}
 
+func FetchFollowUpActivitiesByID(dbC *DBConnection, mainActivityID int) ([]Activity, error) {
+	/*This function fetches follow-up activities for a given activity by id*/
+	activities := make([]Activity, 0)
+
+	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
+		`MATCH (mac:Activity)<-[:FOLLOWUP]-(oac:Activity) WHERE ID(mac) = toInteger($mainActivityID)
+		return DISTINCT ID(oac) as oacID`,
+		map[string]any{
+			"mainActivityID": mainActivityID,
+		}, neo4j.EagerResultTransformer)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(result.Records) == 0 {
+		return nil, NoActivityError{}
+	}
+	for _, record := range result.Records {
+		otherActivityID, _, err := neo4j.GetRecordValue[int64](record, "oacID")
+		if err != nil {
+			return nil, fmt.Errorf("could not find activity node")
+		}
+		activity, err := FetchActivityByID(dbC, int(otherActivityID))
+		if err != nil {
+			return nil, err
+		}
+		activities = append(activities, *activity)
+	}
 	return activities, nil
 }
 
@@ -244,7 +274,6 @@ func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("deleted activity with id: %d from database", activityID)
 	return nil
 }
 
@@ -268,7 +297,6 @@ func ModifyActivity(dbC *DBConnection, modifiedActivity *Activity) error {
 	if err != nil {
 		return err
 	}
-	log.Println("modified activity into: ", modifiedActivity)
 	return nil
 }
 

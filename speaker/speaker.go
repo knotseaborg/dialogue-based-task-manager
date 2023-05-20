@@ -23,6 +23,7 @@ func Main() {
 		// This channel input stops recording go routine
 		pipe <- consoleInput
 		text, err := gpt.Transcript()
+		// Process transcript
 		if err != nil {
 			panic(err)
 		}
