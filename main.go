@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/knotseaborg/dbtm/activity"
+	"github.com/knotseaborg/dbtm/gpt"
 )
 
 func main() {
@@ -18,7 +18,8 @@ func main() {
 	}
 	defer f.Close()
 	log.SetOutput(f)
-	activity.Main()
+	gpt.Complete(&gpt.Spake{Source: "User", Content: "Hey Emma! Do I have any deadlines today?"})
+	//activity.Main()
 	//speaker.TestTranscription()
 	//speaker.Main()
 }
