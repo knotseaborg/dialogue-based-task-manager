@@ -50,9 +50,9 @@ func CreateMainActivity(c *gin.Context) {
 		log.Fatal(err)
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":     http.StatusOK,
-		"activity": activity,
-		"message":  "stored activity in database",
+		"code":             http.StatusOK,
+		"activity_content": activity,
+		"message":          fmt.Sprintf("created new activity with id:%d in database", activity.ID),
 	})
 	log.Println("stored activity: ", activity)
 }
@@ -71,9 +71,9 @@ func CreateFollowUpActivity(c *gin.Context) {
 			log.Fatal(err)
 		case NoActivityError:
 			c.JSON(http.StatusOK, gin.H{
-				"code":     http.StatusNotFound,
-				"activity": "",
-				"message":  "main activity not found in database",
+				"code":             http.StatusOK,
+				"activity_content": "{}",
+				"message":          "main activity not found in database",
 			})
 			log.Printf("main activity with id: %d not found in database", mainActivityID)
 			return
@@ -87,9 +87,9 @@ func CreateFollowUpActivity(c *gin.Context) {
 	}
 	InsertActivityRelation(dbC, mainActivityID, activity.ID)
 	c.JSON(http.StatusOK, gin.H{
-		"code":     http.StatusOK,
-		"activity": activity,
-		"message":  fmt.Sprintf("stored follow-up activity with id: %d, in database for activity with id: %d", activity.ID, mainActivityID),
+		"code":             http.StatusOK,
+		"activity_content": activity,
+		"message":          fmt.Sprintf("created new follow-up activity with id: %d, in database for main activity with id: %d", activity.ID, mainActivityID),
 	})
 	log.Println("stored follow-up activity with id: ", activity, "for activity: ", mainActivity)
 }
@@ -107,18 +107,18 @@ func ActivityByID(c *gin.Context) {
 			log.Fatal(err)
 		case NoActivityError:
 			c.JSON(http.StatusOK, gin.H{
-				"code":     http.StatusNotFound,
-				"activity": "",
-				"message":  fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+				"code":             http.StatusOK,
+				"activity_content": "{}",
+				"message":          fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
 			})
 			log.Printf("activty with id %d does not exist in the database", ID)
 			return
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":     http.StatusOK,
-		"activity": activity,
-		"message":  fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
+		"code":             http.StatusOK,
+		"activity_content": activity,
+		"message":          fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
 	})
 	log.Println("fetched activity from database using ID")
 }
@@ -136,11 +136,11 @@ func FollowUpActivitiesByID(c *gin.Context) {
 			log.Fatal(err)
 		case NoActivityError:
 			c.JSON(http.StatusOK, gin.H{
-				"code":     http.StatusNotFound,
-				"activity": "",
-				"message":  fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+				"code":             http.StatusOK,
+				"activity_content": "{}",
+				"message":          fmt.Sprintf("activty with id: %d not found in the database", ID),
 			})
-			log.Printf("activty with id %d does not exist in the database", ID)
+			log.Printf("activty with id %d not found in the database", ID)
 			return
 		}
 	}
@@ -151,19 +151,19 @@ func FollowUpActivitiesByID(c *gin.Context) {
 			log.Fatal(err)
 		case NoActivityError:
 			c.JSON(http.StatusOK, gin.H{
-				"code":       http.StatusNotFound,
-				"activities": activities,
-				"message":    fmt.Sprintf("activty with id: %d, does not exist in the database", ID),
+				"code":             http.StatusOK,
+				"activity_content": activities,
+				"message":          fmt.Sprintf("activty with id: %d not found in the database", ID),
 			})
 			return
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":       http.StatusOK,
-		"activities": activities,
-		"message":    fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
+		"code":             http.StatusOK,
+		"activity_content": activities,
+		"message":          fmt.Sprintf("fetched activity details from database where activity id is %d", ID),
 	})
-	log.Println("fetched activity from database using ID")
+	log.Println("fetched activity from database")
 }
 
 func ActivitiesByFilter(c *gin.Context) {
@@ -179,20 +179,20 @@ func ActivitiesByFilter(c *gin.Context) {
 			log.Fatal(err)
 		case NoActivityError:
 			c.JSON(http.StatusOK, gin.H{
-				"code":       http.StatusNotFound,
-				"activities": "",
-				"message":    "activty with the filter does not exist in the database",
+				"code":             http.StatusOK,
+				"activity_content": "{}",
+				"message":          "activty with the filter not found in the database",
 			})
-			log.Printf("activty with the filter does not exist in the database")
+			log.Printf("activty with the filter does not found in the database")
 			return
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"code":       http.StatusOK,
-		"activities": activities,
-		"message":    "fetched activities from database using filter",
+		"code":             http.StatusOK,
+		"activity_content": activities,
+		"message":          "fetched activities from database using filter",
 	})
-	fmt.Println("fetched activities: ", len(activities), ", using filter", filter)
+	fmt.Println("fetched ", len(activities), "activities from the database")
 }
 
 func EditActivity(c *gin.Context) {
@@ -206,9 +206,9 @@ func EditActivity(c *gin.Context) {
 	}
 	log.Println("modified activity into: ", activity)
 	c.JSON(http.StatusOK, gin.H{
-		"code":     http.StatusOK,
-		"activity": activity,
-		"message":  fmt.Sprintf("edited activity with id: %d, in database", activity.ID),
+		"code":             http.StatusOK,
+		"activity_content": activity,
+		"message":          fmt.Sprintf("edited activity with id: %d, in database", activity.ID),
 	})
 }
 
@@ -224,7 +224,7 @@ func DeleteActivity(c *gin.Context) {
 	}
 	log.Printf("deleted activity with id: %d from database", mainActivityID)
 	c.JSON(http.StatusOK, gin.H{
-		"code":    http.StatusOK,
-		"message": fmt.Sprintf("deleted activity with id: %d", mainActivityID),
+		"status_code": http.StatusOK,
+		"message":     fmt.Sprintf("deleted activity with id: %d", mainActivityID),
 	})
 }

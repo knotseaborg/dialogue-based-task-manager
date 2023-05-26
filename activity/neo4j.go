@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -83,7 +82,7 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 	/*This function retrieves an activity from the database*/
 	activity := Activity{ID: ID}
 	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
-		"MATCH (ac:Activity) WHERE id(ac) = toInteger($id) RETURN ac",
+		"MATCH (ac:Activity) WHERE id(ac) = toInteger($id) RETURN ac, toSTRING(ac.StartTime) as StartTime, toSTRING(ac.EndTime) as EndTime",
 		map[string]any{
 			"id": ID,
 		}, neo4j.EagerResultTransformer)
@@ -97,16 +96,16 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 	if err != nil {
 		return nil, NoActivityError{}
 	}
-	startTime, err := neo4j.GetProperty[time.Time](activityNode, "StartTime")
+	startTime, _, err := neo4j.GetRecordValue[string](result.Records[0], "StartTime")
 	if err != nil {
 		return nil, err
 	}
-	activity.StartTime = startTime.Format(TIMEFORMAT)
-	endTime, err := neo4j.GetProperty[time.Time](activityNode, "EndTime")
+	activity.StartTime = startTime
+	endTime, _, err := neo4j.GetRecordValue[string](result.Records[0], "EndTime")
 	if err != nil {
 		return nil, err
 	}
-	activity.EndTime = endTime.Format(TIMEFORMAT)
+	activity.EndTime = endTime
 	activity.Description, err = neo4j.GetProperty[string](activityNode, "Description")
 	if err != nil {
 		return nil, err
