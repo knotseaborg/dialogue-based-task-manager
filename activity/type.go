@@ -6,7 +6,7 @@ import (
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
 
-const TIMEFORMAT = "2016-11-22T18:59:00.000+0900"
+const TIMEFORMAT = "2006-01-02T15:04:05.000+0900"
 
 type Activity struct {
 	ID           int      `json:"id"`
@@ -29,6 +29,7 @@ type Filter struct {
 	EndTimeBounds   TimeBounds `json:"end_time_bounds"`
 	Keywords        []string   `json:"keywords"`
 	Participants    []string   `json:"participants"`
+	Status          []bool     `json:"status"`
 }
 
 func (f TimeBounds) isEmpty() bool {

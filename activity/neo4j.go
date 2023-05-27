@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/neo4j/neo4j-go-driver/v5/neo4j"
 )
@@ -48,7 +49,7 @@ func InsertActivity(dbC *DBConnection, activity *Activity) error {
 			MATCH (ac:Activity) WHERE id(ac) = toInteger($id) WITH kw, ac
 			MERGE (kw) <-[r: INDEX]-> (ac)`,
 			map[string]any{
-				"text": keyword,
+				"text": strings.ToLower(keyword),
 				"id":   activityID,
 			}, neo4j.EagerResultTransformer)
 		if err != nil {
@@ -63,7 +64,7 @@ func InsertActivity(dbC *DBConnection, activity *Activity) error {
 			MATCH (ac:Activity) WHERE id(ac) = toInteger($id) WITH p, ac
 			MERGE (p) <-[r: PARTICIPANT]-> (ac)`,
 			map[string]any{
-				"name":   person.Name,
+				"name":   strings.ToLower(person.Name),
 				"handle": person.Handle,
 				"id":     activityID,
 			}, neo4j.EagerResultTransformer)
@@ -165,21 +166,30 @@ func FetchActivitiesByFilter(dbC *DBConnection, filter *Filter) ([]Activity, err
 		filter.EndTimeBounds.UpperBound = "2099-11-22T18:59:00.000+0900"
 	}
 
+	for i := range filter.Keywords {
+		filter.Keywords[i] = strings.ToLower(filter.Keywords[i])
+	}
+
+	for i := range filter.Participants {
+		filter.Participants[i] = strings.ToLower(filter.Participants[i])
+	}
+
 	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
 		`MATCH (ac:Activity) WHERE ac.StartTime >= DATETIME($startTimeLower) AND ac.StartTime <= DATETIME($startTimeUpper)
-		AND ac.EndTime >= DATETIME($EndTimeLower) AND ac.EndTime <= DATETIME($EndTimeUpper) WITH ac
-		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR kw.Text IN $keywords WITH kw, ac
+		AND ac.EndTime >= DATETIME($endTimeLower) AND ac.EndTime <= DATETIME($endTimeUpper) WITH ac
+		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR toLower(kw.Text) IN $keywords WITH kw, ac
 		MATCH (kw)-[:INDEX]-(ac) WITH ac
-		MATCH (p:Person) WHERE SIZE($participants) = 0 OR p.Name IN $participants WITH ac, p
-		MATCH (p)-[:PARTICIPANT]-(ac)
+		MATCH (p:Person) WHERE SIZE($participants) = 0 OR toLower(p.Name) IN $participants WITH ac, p
+		MATCH (p)-[:PARTICIPANT]-(ac) WHERE SIZE($status) = 0 OR ac.Status IN $status
 		RETURN DISTINCT ID(ac) as acID`,
 		map[string]any{
 			"participants":   filter.Participants,
 			"keywords":       filter.Keywords,
 			"startTimeLower": filter.StartTimeBounds.LowerBound,
 			"startTimeUpper": filter.StartTimeBounds.UpperBound,
-			"EndTimeLower":   filter.EndTimeBounds.LowerBound,
-			"EndTimeUpper":   filter.EndTimeBounds.UpperBound,
+			"endTimeLower":   filter.EndTimeBounds.LowerBound,
+			"endTimeUpper":   filter.EndTimeBounds.UpperBound,
+			"status":         filter.Status,
 		}, neo4j.EagerResultTransformer)
 	if err != nil {
 		return nil, err
@@ -277,22 +287,46 @@ func DeleteActivityByID(dbC *DBConnection, activityID int, cascade bool) error {
 }
 
 func ModifyActivity(dbC *DBConnection, modifiedActivity *Activity) error {
+	activity, err := FetchActivityByID(dbC, modifiedActivity.ID)
+	if err != nil {
+		return err
+	}
+	modifiedMap := map[string]any{}
+	if modifiedActivity.Description == "" {
+		modifiedMap["description"] = activity.Description
+	} else {
+		modifiedMap["description"] = modifiedActivity.Description
+	}
+	if modifiedActivity.StartTime == "" {
+		modifiedMap["startTime"] = activity.StartTime
+	} else {
+		modifiedMap["startTime"] = modifiedActivity.StartTime
+	}
+	if modifiedActivity.EndTime == "" {
+		modifiedMap["endTime"] = activity.EndTime
+	} else {
+		modifiedMap["endTime"] = modifiedActivity.EndTime
+	}
+	if modifiedActivity.Priority == 0 {
+		modifiedMap["priority"] = activity.Priority
+	} else {
+		modifiedMap["priority"] = modifiedActivity.Priority
+	}
+	if !modifiedActivity.Status { //Activities can only be set to complete
+		modifiedMap["status"] = activity.Status
+	} else {
+		modifiedMap["status"] = modifiedActivity.Status
+	}
+	fmt.Print(activity)
 	/*This functions creates a new activity in the Database*/
-	_, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
-		`MATCH(ac) WHERE ID(ac) = toInteger($id) with ac
+	_, err = neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
+		`MATCH(ac:Activity) WHERE ID(ac) = toInteger($id) with ac
 		SET ac.Description = $description, 
 		ac.StartTime = datetime($startTime),
 		ac.EndTime = datetime($endTime),
 		ac.Priority = toInteger($priority),
 		ac.Status = toBooleanOrNull($status)`,
-		map[string]any{
-			"id":          modifiedActivity.ID,
-			"description": modifiedActivity.Description,
-			"startTime":   modifiedActivity.StartTime,
-			"endTime":     modifiedActivity.EndTime,
-			"priority":    modifiedActivity.Priority,
-			"status":      modifiedActivity.Status,
-		}, neo4j.EagerResultTransformer)
+		modifiedMap, neo4j.EagerResultTransformer)
 	if err != nil {
 		return err
 	}

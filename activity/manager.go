@@ -28,16 +28,17 @@ func Main() {
 	router.GET("/followup/:id", FollowUpActivitiesByID)
 	router.DELETE("/activity/:id", DeleteActivity)
 	router.PUT("activity/edit", EditActivity)
-	router.GET("/user/time", Now)
+	router.GET("/time", Now)
 
 	router.Run("localhost:8080")
 }
 
 func Now(c *gin.Context) {
+	now := time.Now()
 	c.JSON(http.StatusOK, gin.H{
 		"code":    http.StatusOK,
-		"time":    time.Now().Format(TIMEFORMAT),
-		"message": fmt.Sprint("time right now is ", time.Now()),
+		"time":    fmt.Sprintf("Datetime is %s and the day is %s", now.Format(TIMEFORMAT), now.Weekday()),
+		"message": "current time has been fetched",
 	})
 }
 

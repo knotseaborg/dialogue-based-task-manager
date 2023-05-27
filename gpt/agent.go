@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/knotseaborg/dbtm/activity"
 	openai "github.com/sashabaranov/go-openai"
 )
 
@@ -23,25 +26,33 @@ func (e APIError) Error() string {
 	return "Fatal error. API does not exist"
 }
 
-var agentPrompt string
+var agentInstruction string
+var promptQueue []string
 
 func SpakeHandler(toAudioComm chan string, dialogue *Spake) error {
 	/*Handles dialogues*/
 	c := openai.NewClient(os.Getenv("DBTM_OPEN_AI_KEY"))
-	if agentPrompt == "" {
+	if agentInstruction == "" {
 		rawIntroduction, err := os.ReadFile("./gpt/prompt.txt")
 		if err != nil {
 			return nil
 		}
-		agentPrompt = string(rawIntroduction)
+		agentInstruction = string(rawIntroduction)
+		agentInstruction = strings.Replace(agentInstruction, "!!CURRENT_TIME!!", time.Now().Format(activity.TIMEFORMAT), 1)
+		agentInstruction = strings.Replace(agentInstruction, "!!USER_NAME!!", "Reuben", 1)
 	}
 	// add spake to prompt
-	agentPrompt = fmt.Sprintf("%s\n%s: %s", agentPrompt, dialogue.Source, dialogue.Content)
+	promptQueue = append(promptQueue, fmt.Sprintf("%s: %s", dialogue.Source, dialogue.Content))
 
 	// emma speaks
 	dialogue, err := emmaSpake(c)
-	if err != nil {
-		return err
+	// expect an error, when there is a context overflow
+	for retryLimit := 10; err != nil && retryLimit > 0; dialogue, err = emmaSpake(c) {
+		// Pop message off queue and try again
+		promptQueue = promptQueue[1:]
+		retryLimit--
+		log.Print("Token limit exceeded. Retrying ", retryLimit)
+		log.Print(err)
 	}
 
 	if message, _, ok := strings.Cut(dialogue.Content, "::"); ok {
@@ -51,10 +62,10 @@ func SpakeHandler(toAudioComm chan string, dialogue *Spake) error {
 	}
 
 	// add emma's spake to prompt
-	agentPrompt = fmt.Sprintf("%s\n%s: %s", agentPrompt, dialogue.Source, dialogue.Content)
+	promptQueue = append(promptQueue, fmt.Sprintf("%s: %s", dialogue.Source, dialogue.Content))
 
 	// get api response if there is one
-	APIResponse, err := APIHandler(dialogue.Content)
+	APIResponse, err := apiHandler(dialogue.Content)
 	if err != nil {
 		return err
 	}
@@ -66,16 +77,18 @@ func SpakeHandler(toAudioComm chan string, dialogue *Spake) error {
 		}
 		return nil
 	}
-	fmt.Println(agentPrompt)
+	fmt.Println(strings.Join(promptQueue, "\n"))
 	return nil
 }
 
 func emmaSpake(c *openai.Client) (*Spake, error) {
+
+	prompt := fmt.Sprintf("%s%s", agentInstruction, strings.Join(promptQueue, "\n"))
 	ctx := context.Background()
 	req := openai.CompletionRequest{
 		Model:       openai.GPT3TextDavinci003,
 		MaxTokens:   500,
-		Prompt:      agentPrompt + "\n" + "Emma:",
+		Prompt:      fmt.Sprintf("%s\n%s", prompt, "Emma:"),
 		Stop:        []string{"User:", "Emma:", "API_RESPONSE", "API Handler"},
 		Temperature: 0.5,
 		TopP:        0.2,
@@ -87,7 +100,7 @@ func emmaSpake(c *openai.Client) (*Spake, error) {
 	return &Spake{Source: "Emma", Content: strings.Trim(resp.Choices[0].Text, "\n ")}, nil
 }
 
-func APIHandler(agentResponse string) (string, error) {
+func apiHandler(agentResponse string) (string, error) {
 
 	directiveReg, _ := regexp.Compile(`::[A-Z_]+(/\d+)?`)
 	dataReg, _ := regexp.Compile(`(?s){.+}`)
@@ -119,11 +132,23 @@ func APIHandler(agentResponse string) (string, error) {
 					return "", err
 				}
 				return response, nil
+			case "::GET_ACTIVITY":
+				response, err := makeRequest("http://localhost:8080/activity/"+activityID, "GET", "{}")
+				if err != nil {
+					return "", err
+				}
+				return response, nil
 			}
 		}
 		switch directive {
 		default:
 			return "", APIError{}
+		case "::TIME_NOW":
+			response, err := makeRequest("http://localhost:8080/time", "GET", "{}")
+			if err != nil {
+				return "", err
+			}
+			return response, nil
 		case "::CREATE_ACTIVITY":
 			response, err := makeRequest("http://localhost:8080/activity/create", "PUT", data)
 			if err != nil {
