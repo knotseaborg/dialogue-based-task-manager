@@ -291,7 +291,7 @@ func ModifyActivity(dbC *DBConnection, modifiedActivity *Activity) error {
 	if err != nil {
 		return err
 	}
-	modifiedMap := map[string]any{}
+	modifiedMap := map[string]any{"id": modifiedActivity.ID}
 	if modifiedActivity.Description == "" {
 		modifiedMap["description"] = activity.Description
 	} else {
