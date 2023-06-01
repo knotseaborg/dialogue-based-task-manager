@@ -33,7 +33,7 @@ func SpakeHandler(toAudioComm chan string, dialogue *Spake) error {
 	/*Handles dialogues*/
 	c := openai.NewClient(os.Getenv("DBTM_OPEN_AI_KEY"))
 	if agentInstruction == "" {
-		rawIntroduction, err := os.ReadFile("./gpt/prompt.txt")
+		rawIntroduction, err := os.ReadFile(os.Getenv("DBTM_PROMPT_PATH"))
 		if err != nil {
 			return nil
 		}
@@ -115,25 +115,25 @@ func apiHandler(agentResponse string) (string, error) {
 			default:
 				return "", APIError{}
 			case "::CREATE_FOLLOWUP_ACTIVITY":
-				response, err := makeRequest("http://localhost:8080/followup/create/"+activityID, "PUT", data)
+				response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/followup/create/"+activityID, "PUT", data)
 				if err != nil {
 					return "", err
 				}
 				return response, nil
 			case "::FOLLOWUP":
-				response, err := makeRequest("http://localhost:8080/followup/"+activityID, "GET", "{}")
+				response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/followup/"+activityID, "GET", "{}")
 				if err != nil {
 					return "", err
 				}
 				return response, nil
 			case "::DELETE_ACTIVITY":
-				response, err := makeRequest("http://localhost:8080/activity/"+activityID, "DELETE", "{}")
+				response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/activity/"+activityID, "DELETE", "{}")
 				if err != nil {
 					return "", err
 				}
 				return response, nil
 			case "::GET_ACTIVITY":
-				response, err := makeRequest("http://localhost:8080/activity/"+activityID, "GET", "{}")
+				response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/activity/"+activityID, "GET", "{}")
 				if err != nil {
 					return "", err
 				}
@@ -144,25 +144,25 @@ func apiHandler(agentResponse string) (string, error) {
 		default:
 			return "", APIError{}
 		case "::TIME_NOW":
-			response, err := makeRequest("http://localhost:8080/time", "GET", "{}")
+			response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/time", "GET", "{}")
 			if err != nil {
 				return "", err
 			}
 			return response, nil
 		case "::CREATE_ACTIVITY":
-			response, err := makeRequest("http://localhost:8080/activity/create", "PUT", data)
+			response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/activity/create", "PUT", data)
 			if err != nil {
 				return "", err
 			}
 			return response, nil
 		case "::GET_ACTIVITIES":
-			response, err := makeRequest("http://localhost:8080/activity", "POST", data)
+			response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/activity", "POST", data)
 			if err != nil {
 				return "", err
 			}
 			return response, nil
 		case "::EDIT_ACTIVITY":
-			response, err := makeRequest("http://localhost:8080/activity/edit", "PUT", data)
+			response, err := makeRequest(os.Getenv("DBTM_SERVER_URI")+"/activity/edit", "PUT", data)
 			if err != nil {
 				return "", err
 			}
