@@ -57,4 +57,8 @@ func main() {
 	// fmt.Print(response)
 	//speaker.TestTranscription()
 	//speaker.Main()
+	// _, err = gpt.Embedding("Hello")
+	// if err != nil {
+	// 	fmt.Println("Hey!")
+	// }
 }
