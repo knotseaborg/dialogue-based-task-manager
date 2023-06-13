@@ -16,7 +16,7 @@ type speechResponse struct {
 	AudioContent string `json:"audioContent"`
 }
 
-func ToAudio(text string) (string, error) {
+func ToAudio(text string, UIOutput chan []byte) (string, error) {
 	//var responseBody APIResponse
 
 	data := fmt.Sprintf(`{
@@ -73,6 +73,7 @@ func ToAudio(text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
+	// Send response to UI about completion
+	UIOutput <- []byte("x")
 	return string(body), nil
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/knotseaborg/dbtm/gpt"
 )
 
-func StartRecording(comm chan string) {
+func StartRecording(comm chan string, UIInput chan []byte) {
 	fmt.Println("Press <enter> to start/stop recording.")
 
 	//Make channel to detect start/stop inputs
@@ -17,11 +17,23 @@ func StartRecording(comm chan string) {
 	var consoleInput []byte = make([]byte, 1)
 	for {
 		// Wait for user input to begin recording
-		os.Stdin.Read(consoleInput)
+		if UIInput == nil {
+			os.Stdin.Read(consoleInput)
+		} else {
+			<-UIInput
+		}
 		go record(recordingTrigger, os.Getenv("DBTM_AUDIO_INPUT_PATH"))
 		// This channel input stops recording go routine
-		os.Stdin.Read(consoleInput)
-		recordingTrigger <- consoleInput
+		if UIInput == nil {
+			os.Stdin.Read(consoleInput)
+			recordingTrigger <- consoleInput
+		} else {
+			input, ok := <-UIInput
+			if ok {
+				log.Println("Error: Cannot process UIInput")
+			}
+			recordingTrigger <- input
+		}
 		text, err := gpt.Transcript()
 		// Push transcript into channel
 		if err != nil {
@@ -32,9 +44,9 @@ func StartRecording(comm chan string) {
 	}
 }
 
-func StartPlaying(comm chan string) {
+func StartPlaying(comm chan string, UIOutput chan []byte) {
 	for {
-		_, err := ToAudio(<-comm)
+		_, err := ToAudio(<-comm, UIOutput)
 		if err != nil {
 			log.Panic(err)
 		}
