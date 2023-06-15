@@ -68,11 +68,11 @@ func ToAudio(text string) (string, error) {
 	}
 	fmt.Printf("Audio content written to file: %v\n", filename)
 
+	// Play the audio file
 	_, err = exec.Command("mplayer", "./temp/output.mp3").Output()
 
 	if err != nil {
 		return "", err
 	}
-
 	return string(body), nil
 }
