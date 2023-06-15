@@ -23,13 +23,21 @@ func main() {
 	}
 	defer f.Close()
 	log.SetOutput(f)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	UIInput, UIOutput := make(chan []byte, 1), make(chan []byte, 1)
+	startSignal, stopSignal := make(chan []byte, 1), make(chan []byte, 1)
+	message := make(chan string)
 	toAudioComm, toTextcomm := make(chan string), make(chan string)
 
-	go ui.CreateWindow(UIInput, UIOutput)
+	// The stream which manages data flow between the processes and the UI
+	uiStream := ui.UIStream{StartSignal: startSignal,
+		StopSignal: stopSignal,
+		Message:    message,
+	}
 
-	go voice.StartPlaying(toAudioComm, UIOutput)
+	go ui.CreateWindow(&uiStream)
+
+	go voice.StartPlaying(toAudioComm, uiStream.StopSignal, uiStream.Message)
 
 	go activity.Main()
 	time.Sleep(2 * 1000000000) //Wait for 2 seconds to allow the server to setup
@@ -37,9 +45,6 @@ func main() {
 	go func() {
 		fmt.Print("Running spakehandler")
 		for {
-			//reader := bufio.NewReader(os.Stdin)
-			//fmt.Print("Enter text: ")
-			//text, _ := reader.ReadString('\n')
 			text := <-toTextcomm
 			fmt.Print(text)
 			err := gpt.SpakeHandler(toAudioComm, &gpt.Spake{Source: "User", Content: text})
@@ -49,5 +54,5 @@ func main() {
 		}
 	}()
 
-	voice.StartRecording(toTextcomm, UIInput)
+	voice.StartRecording(toTextcomm, uiStream.StartSignal)
 }

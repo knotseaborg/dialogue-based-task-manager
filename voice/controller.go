@@ -8,7 +8,7 @@ import (
 	"github.com/knotseaborg/dbtm/gpt"
 )
 
-func StartRecording(comm chan string, UIInput chan []byte) {
+func StartRecording(comm chan string, startSignal chan []byte) {
 	fmt.Println("Press <enter> to start/stop recording.")
 
 	//Make channel to detect start/stop inputs
@@ -17,20 +17,20 @@ func StartRecording(comm chan string, UIInput chan []byte) {
 	var consoleInput []byte = make([]byte, 1)
 	for {
 		// Wait for user input to begin recording
-		if UIInput == nil {
+		if startSignal == nil {
 			os.Stdin.Read(consoleInput)
 		} else {
-			<-UIInput
+			<-startSignal
 		}
 		go record(recordingTrigger, os.Getenv("DBTM_AUDIO_INPUT_PATH"))
 		// This channel input stops recording go routine
-		if UIInput == nil {
+		if startSignal == nil {
 			os.Stdin.Read(consoleInput)
 			recordingTrigger <- consoleInput
 		} else {
-			input, ok := <-UIInput
-			if ok {
-				log.Println("Error: Cannot process UIInput")
+			input, ok := <-startSignal
+			if !ok {
+				log.Println("Error: Cannot process startSignal")
 			}
 			recordingTrigger <- input
 		}
@@ -44,11 +44,16 @@ func StartRecording(comm chan string, UIInput chan []byte) {
 	}
 }
 
-func StartPlaying(comm chan string, UIOutput chan []byte) {
+func StartPlaying(comm chan string, stopSignal chan []byte, message chan string) {
 	for {
-		_, err := ToAudio(<-comm, UIOutput)
+		text := <-comm
+		message <- text
+		_, err := ToAudio(text)
 		if err != nil {
 			log.Panic(err)
 		}
+
+		// Send stop signal to UI. This tells the UI that the Audio has finished playing.
+		stopSignal <- []byte("x")
 	}
 }

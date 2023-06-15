@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="design.css"/>
-
-        <script type="text/tiscript">       
+        <link rel="stylesheet" href="design.css"/> 
+        <script type="text/tiscript">
             $(body).on("keyup",function(){
                 view.askEmma();
             });
@@ -11,7 +10,13 @@
     </head>
     <body>
         <div class="center-screen">
-            <button><img  id="trigger" src="emma_2.png"/></button>
+            <button class="center-screen"><img  id="trigger" src="emma_2.png"/></button>
+        </div>
+        <div id="message" class="center-screen">
+            <img id="hearing" class="hidden" src="sound.gif"/>
+        </div>
+        <div class="center-screen footer">
+            <a href="https://github.com/knotseaborg/dialogue-based-task-manager">github.com/knotseaborg</a>
         </div>
     </body>
 </html>
