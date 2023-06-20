@@ -154,14 +154,16 @@ func FetchActivityByID(dbC *DBConnection, ID int) (*Activity, error) {
 func FetchActivitiesByFilter(dbC *DBConnection, filter *Filter) ([]Activity, error) {
 	/*This function fetches activity by filters*/
 	activities := make([]Activity, 0)
-
+	hasDefault := false
 	// Default values for TimeBounds
 	if filter.StartTimeBounds.isEmpty() {
+		hasDefault = true
 		filter.StartTimeBounds.LowerBound = "2000-11-22T18:59:00.000+0900"
 		filter.StartTimeBounds.UpperBound = "2099-11-22T18:59:00.000+0900"
 	}
 
 	if filter.EndTimeBounds.isEmpty() {
+		hasDefault = true
 		filter.EndTimeBounds.LowerBound = "2000-11-22T18:59:00.000+0900"
 		filter.EndTimeBounds.UpperBound = "2099-11-22T18:59:00.000+0900"
 	}
@@ -174,14 +176,27 @@ func FetchActivitiesByFilter(dbC *DBConnection, filter *Filter) ([]Activity, err
 		filter.Participants[i] = strings.ToLower(filter.Participants[i])
 	}
 
-	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
-		`MATCH (ac:Activity) WHERE ac.StartTime >= DATETIME($startTimeLower) AND ac.StartTime <= DATETIME($startTimeUpper)
+	var query string
+	if hasDefault {
+		query = `MATCH (ac:Activity) WHERE ac.StartTime >= DATETIME($startTimeLower) AND ac.StartTime <= DATETIME($startTimeUpper)
 		AND ac.EndTime >= DATETIME($endTimeLower) AND ac.EndTime <= DATETIME($endTimeUpper) WITH ac
 		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR toLower(kw.Text) IN $keywords WITH kw, ac
 		MATCH (kw)-[:INDEX]-(ac) WITH ac
 		MATCH (p:Person) WHERE SIZE($participants) = 0 OR toLower(p.Name) IN $participants WITH ac, p
 		MATCH (p)-[:PARTICIPANT]-(ac) WHERE SIZE($status) = 0 OR ac.Status IN $status
-		RETURN DISTINCT ID(ac) as acID`,
+		RETURN DISTINCT ID(ac) as acID`
+	} else {
+		query = `MATCH (ac:Activity) WHERE ac.StartTime >= DATETIME($startTimeLower) AND ac.StartTime <= DATETIME($startTimeUpper)
+		OR ac.EndTime >= DATETIME($endTimeLower) AND ac.EndTime <= DATETIME($endTimeUpper) WITH ac
+		MATCH (kw:Keyword) WHERE SIZE($keywords) = 0 OR toLower(kw.Text) IN $keywords WITH kw, ac
+		MATCH (kw)-[:INDEX]-(ac) WITH ac
+		MATCH (p:Person) WHERE SIZE($participants) = 0 OR toLower(p.Name) IN $participants WITH ac, p
+		MATCH (p)-[:PARTICIPANT]-(ac) WHERE SIZE($status) = 0 OR ac.Status IN $status
+		RETURN DISTINCT ID(ac) as acID`
+	}
+
+	result, err := neo4j.ExecuteQuery(dbC.Context, dbC.Driver,
+		query,
 		map[string]any{
 			"participants":   filter.Participants,
 			"keywords":       filter.Keywords,
