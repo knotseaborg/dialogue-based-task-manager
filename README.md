@@ -19,3 +19,13 @@ Think of the interaction environment as that of a discord channel consisting of 
 
 ![image](https://github.com/knotseaborg/dialogue-based-task-manager/assets/24828420/13615a43-8bf1-4de8-a35b-dde855e8b3e8)
 
+## Setup
+1. Install Go programming language
+2. Download the repository in go/src/github.com/knotseaborg
+3. Download and setup Neo4J graph database
+4. Create the ```env.sh``` file following the ```env_sample.sh```
+
+## How to run the app?
+1. Run ```. env.sh``` to export variables.
+2. Run ```neo4j start```the Neo4J graph database
+3. Run ```go run main.go```
